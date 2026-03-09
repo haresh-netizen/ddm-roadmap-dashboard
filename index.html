@@ -158,20 +158,52 @@ function parseRow(cells,idx){
   return{uc:(cells[idx.uc]||"").trim(),level:(cells[idx.level]||"").trim(),market:mkt,category:(cells[idx.category]||"").trim(),description:(cells[idx.desc]||"").trim(),start:toMonth((cells[idx.start]||"").trim()),golive:toMonth((cells[idx.golive]||"").trim()),status:(cells[idx.status]||"").trim(),priority:(cells[idx.priority]||"").trim()};
 }
 function parseCSV(text){
-  const rows=text.trim().split("\n").map(l=>{
-    const c=[];let s="",q=false;
-    for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"'){if(q&&l[i+1]==='"'){s+='"';i++;}else q=!q;}else if(ch===","&&!q){c.push(s.replace(/^"|"$/g,"").trim());s="";}else s+=ch;}
-    c.push(s.replace(/^"|"$/g,"").trim());return c;
-  });
-  let hi=0;
-  for(let i=0;i<Math.min(10,rows.length);i++){
-    const r=rows[i].map(c=>c.toUpperCase());
-    if(r.some(c=>c.includes("USE CASE"))&&r.some(c=>c.includes("MARKET"))){hi=i;break;}
+  // Step 1: parse entire CSV respecting quoted newlines -> array of row arrays
+  const rows=[];
+  let cur=[],cell="",inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){
+      if(inQ&&text[i+1]==='"'){cell+='"';i++;}
+      else inQ=!inQ;
+    } else if(c===","&&!inQ){cur.push(cell.trim());cell="";}
+    else if((c==="\n"||c==="\r")&&!inQ){
+      if(c==="\r"&&text[i+1]==="\n")i++;
+      cur.push(cell.trim());rows.push(cur);cur=[];cell="";
+    } else cell+=c;
   }
-  const hdr=rows[hi].map(h=>h.toUpperCase());
-  const fc=(names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return 0;};
-  const idx={uc:fc(["USE CASE NAME","USE CASE"]),level:fc(["LEVEL"]),market:fc(["MARKET"]),category:fc(["CATEGORY"]),desc:fc(["BRIEF DESCRIPTION","DESCRIPTION"]),start:fc(["START MONTH","START"]),golive:fc(["GO LIVE MONTH","COMPLETION MONTH","GO LIVE"]),status:fc(["STATUS"]),priority:fc(["PRIORITY"])};
-  return rows.slice(hi+1).map(c=>parseRow(c,idx)).filter(r=>r.uc&&MIDX.hasOwnProperty(r.golive));
+  if(cell||cur.length){{cur.push(cell.trim());rows.push(cur);}}
+
+  // Step 2: find the header row — the one containing USE CASE NAME and MARKET
+  let hi=-1;
+  for(let i=0;i<Math.min(15,rows.length);i++){
+    const r=rows[i].map(c=>c.toUpperCase().replace(/[\n\r]+/g," "));
+    if(r.some(c=>c.includes("USE CASE NAME"))&&r.some(c=>c.includes("MARKET"))){hi=i;break;}
+  }
+  // fallback: find row with USE CASE NAME alone
+  if(hi<0){
+    for(let i=0;i<Math.min(15,rows.length);i++){
+      if(rows[i].some(c=>c.toUpperCase().includes("USE CASE NAME"))){hi=i;break;}
+    }
+  }
+  if(hi<0)return[];
+
+  const hdr=rows[hi].map(h=>h.toUpperCase().replace(/[\n\r]+/g," ").trim());
+  const fc=(names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return-1;};
+  const idx={
+    uc:fc(["USE CASE NAME","USE CASE"]),
+    level:fc(["LEVEL"]),
+    market:fc(["MARKET"]),
+    category:fc(["CATEGORY"]),
+    desc:fc(["BRIEF DESCRIPTION","BRIEF","DESCRIPTION"]),
+    start:fc(["START MONTH","START"]),
+    golive:fc(["GO LIVE MONTH","COMPLETION MONTH","GO LIVE"]),
+    status:fc(["STATUS"]),
+    priority:fc(["PRIORITY"])
+  };
+  return rows.slice(hi+1)
+    .map(c=>parseRow(c,idx))
+    .filter(r=>r.uc&&MIDX.hasOwnProperty(r.golive));
 }
 
 async function loadData(){
