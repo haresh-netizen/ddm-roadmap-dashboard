@@ -164,7 +164,10 @@ function parseCSV(text){
     c.push(s.replace(/^"|"$/g,"").trim());return c;
   });
   let hi=0;
-  for(let i=0;i<Math.min(8,rows.length);i++){if(rows[i].some(c=>c.toUpperCase().includes("USE CASE"))){hi=i;break;}}
+  for(let i=0;i<Math.min(10,rows.length);i++){
+    const r=rows[i].map(c=>c.toUpperCase());
+    if(r.some(c=>c.includes("USE CASE"))&&r.some(c=>c.includes("MARKET"))){hi=i;break;}
+  }
   const hdr=rows[hi].map(h=>h.toUpperCase());
   const fc=(names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return 0;};
   const idx={uc:fc(["USE CASE NAME","USE CASE"]),level:fc(["LEVEL"]),market:fc(["MARKET"]),category:fc(["CATEGORY"]),desc:fc(["BRIEF DESCRIPTION","DESCRIPTION"]),start:fc(["START MONTH","START"]),golive:fc(["GO LIVE MONTH","COMPLETION MONTH","GO LIVE"]),status:fc(["STATUS"]),priority:fc(["PRIORITY"])};
